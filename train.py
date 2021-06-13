@@ -1,7 +1,7 @@
 import argparse
 import random
 import math
-
+import os
 from tqdm import tqdm
 import numpy as np
 from PIL import Image
@@ -13,7 +13,8 @@ from torch.autograd import Variable, grad
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms, utils
 
-from dataset import MultiResolutionDataset
+
+from dataset import MultiResolutionDataset, MultiResolutionDataset_Brats
 from model import StyledGenerator, Discriminator
 
 
@@ -54,7 +55,7 @@ def train(args, dataset, generator, discriminator):
     adjust_lr(g_optimizer, args.lr.get(resolution, 0.001))
     adjust_lr(d_optimizer, args.lr.get(resolution, 0.001))
 
-    pbar = tqdm(range(3_000_000))
+    pbar = tqdm(range(500_000))
 
     requires_grad(generator, False)
     requires_grad(discriminator, True)
@@ -216,26 +217,24 @@ def train(args, dataset, generator, discriminator):
             requires_grad(generator, False)
             requires_grad(discriminator, True)
 
-        if (i + 1) % 100 == 0:
-            images = []
+        if (i + 1) % 1 == 0:
 
-            gen_i, gen_j = args.gen_sample.get(resolution, (10, 5))
+            gen_i = args.gen_sample.get(resolution, 10)
 
             with torch.no_grad():
                 for _ in range(gen_i):
-                    images.append(
-                        g_running(
-                            torch.randn(gen_j, code_size).cuda(), step=step, alpha=alpha
-                        ).data.cpu()
-                    )
+                    image = g_running(torch.randn(gen_i, code_size).cuda(), step=step, alpha=alpha).data.cpu()
 
-            utils.save_image(
-                torch.cat(images, 0),
-                f'sample/{str(i + 1).zfill(6)}.png',
-                nrow=gen_i,
-                normalize=True,
-                range=(-1, 1),
-            )
+                max_list = [6476.0, 6655.0, 8979.0, 3918.0]
+                image = (image / 2 + 0.5) * \
+                        torch.Tensor(max_list).view(1, 4, 1, 1)
+                for i in range(4):
+                    image[:, i] = image[:, i] / image[:, i].view(image.shape[0], -1).max(1)[0].view(image.shape[0], 1,
+                                                                                                    1)
+                utils.save_image(utils.make_grid(
+                    torch.cat((image[:, 0:1], image[:, 1:2], image[:, 2:3], image[:, 3:]), dim=0).clamp(0, 1), nrow=10),
+                    f'sample/{str(i + 1).zfill(6)}.png')
+
 
         if (i + 1) % 10000 == 0:
             torch.save(
@@ -261,13 +260,13 @@ if __name__ == '__main__':
     parser.add_argument(
         '--phase',
         type=int,
-        default=600_000,
+        default=200_000,
         help='number of samples used for each training phases',
     )
     parser.add_argument('--lr', default=0.001, type=float, help='learning rate')
-    parser.add_argument('--sched', action='store_true', help='use lr scheduling')
+    parser.add_argument('--sched', default=True, type=bool, help='use lr scheduling')
     parser.add_argument('--init_size', default=8, type=int, help='initial image size')
-    parser.add_argument('--max_size', default=1024, type=int, help='max image size')
+    parser.add_argument('--max_size', default=128, type=int, help='max image size')
     parser.add_argument(
         '--ckpt', default=None, type=str, help='load from previous checkpoints'
     )
@@ -286,8 +285,11 @@ if __name__ == '__main__':
         choices=['wgan-gp', 'r1'],
         help='class of gan loss',
     )
+    parser.add_argument("--gpu_ids", type=str, default='2', help="GPU ids")
+
 
     args = parser.parse_args()
+    os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu_ids
 
     generator = nn.DataParallel(StyledGenerator(code_size)).cuda()
     discriminator = nn.DataParallel(
@@ -321,13 +323,14 @@ if __name__ == '__main__':
 
     transform = transforms.Compose(
         [
-            transforms.RandomHorizontalFlip(),
+            # transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
-            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5), inplace=True),
+            transforms.Normalize((0.5, 0.5, 0.5, 0.5), (0.5, 0.5, 0.5, 0.5), inplace=True),
         ]
     )
 
-    dataset = MultiResolutionDataset(args.path, transform)
+    #dataset = MultiResolutionDataset(args.path, transform)
+    dataset = MultiResolutionDataset_Brats(args.path, transform)
 
     if args.sched:
         args.lr = {128: 0.0015, 256: 0.002, 512: 0.003, 1024: 0.003}

@@ -3,6 +3,9 @@ from io import BytesIO
 import lmdb
 from PIL import Image
 from torch.utils.data import Dataset
+import glob
+import os
+import pickle
 
 
 class MultiResolutionDataset(Dataset):
@@ -35,6 +38,29 @@ class MultiResolutionDataset(Dataset):
 
         buffer = BytesIO(img_bytes)
         img = Image.open(buffer)
+        img = self.transform(img)
+
+        return img
+
+class MultiResolutionDataset_Brats(Dataset):
+    def __init__(self, path, transform, resolution=8):
+
+
+        self.resolution = resolution
+        self.transform = transform
+        self.pickle_list = glob.glob(os.path.join(path, str(self.resolution), '*'))
+
+        self.pickle_list = sorted(self.pickle_list)
+
+    def __len__(self):
+        return len(self.pickle_list)
+
+    def __getitem__(self, index):
+        with open(self.pickle_list[index], 'rb') as f:
+
+            #img = pickle.load(f)
+            img = pickle.load(f).astype('float32')
+
         img = self.transform(img)
 
         return img

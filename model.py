@@ -298,7 +298,7 @@ class ConstantInput(nn.Module):
     def __init__(self, channel, size=4):
         super().__init__()
 
-        self.input = nn.Parameter(torch.randn(1, channel, size, size))
+        self.input = nn.Parameter(torch.randn(1, channel, size, size*2))
 
     def forward(self, input):
         batch = input.shape[0]
@@ -391,15 +391,15 @@ class Generator(nn.Module):
 
         self.to_rgb = nn.ModuleList(
             [
-                EqualConv2d(512, 3, 1),
-                EqualConv2d(512, 3, 1),
-                EqualConv2d(512, 3, 1),
-                EqualConv2d(512, 3, 1),
-                EqualConv2d(256, 3, 1),
-                EqualConv2d(128, 3, 1),
-                EqualConv2d(64, 3, 1),
-                EqualConv2d(32, 3, 1),
-                EqualConv2d(16, 3, 1),
+                EqualConv2d(512, 4, 1),
+                EqualConv2d(512, 4, 1),
+                EqualConv2d(512, 4, 1),
+                EqualConv2d(512, 4, 1),
+                EqualConv2d(256, 4, 1),
+                EqualConv2d(128, 4, 1),
+                EqualConv2d(64, 4, 1),
+                EqualConv2d(32, 4, 1),
+                EqualConv2d(16, 4, 1),
             ]
         )
 
@@ -485,7 +485,7 @@ class StyledGenerator(nn.Module):
 
             for i in range(step + 1):
                 size = 4 * 2 ** i
-                noise.append(torch.randn(batch, 1, size, size, device=input[0].device))
+                noise.append(torch.randn(batch, 1, size, size*2, device=input[0].device))
 
         if mean_style is not None:
             styles_norm = []
@@ -517,13 +517,13 @@ class Discriminator(nn.Module):
                 ConvBlock(512, 512, 3, 1, downsample=True),  # 16
                 ConvBlock(512, 512, 3, 1, downsample=True),  # 8
                 ConvBlock(512, 512, 3, 1, downsample=True),  # 4
-                ConvBlock(513, 512, 3, 1, 4, 0),
+                ConvBlock(513, 512, 3, 1, (4,8), 0),
             ]
         )
 
         def make_from_rgb(out_channel):
             if from_rgb_activate:
-                return nn.Sequential(EqualConv2d(3, out_channel, 1), nn.LeakyReLU(0.2))
+                return nn.Sequential(EqualConv2d(4, out_channel, 1), nn.LeakyReLU(0.2))
 
             else:
                 return EqualConv2d(3, out_channel, 1)
@@ -558,7 +558,7 @@ class Discriminator(nn.Module):
             if i == 0:
                 out_std = torch.sqrt(out.var(0, unbiased=False) + 1e-8)
                 mean_std = out_std.mean()
-                mean_std = mean_std.expand(out.size(0), 1, 4, 4)
+                mean_std = mean_std.expand(out.size(0), 1, 4, 8)
                 out = torch.cat([out, mean_std], 1)
 
             out = self.progression[index](out)

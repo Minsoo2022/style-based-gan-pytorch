@@ -2,7 +2,7 @@ import argparse
 from io import BytesIO
 import multiprocessing
 from functools import partial
-
+import os
 from PIL import Image
 import lmdb
 from tqdm import tqdm
@@ -65,7 +65,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     imgset = datasets.ImageFolder(args.path)
-
+    os.makedirs(args.out, exist_ok=True)
     with lmdb.open(args.out, map_size=1024 ** 4, readahead=False) as env:
         with env.begin(write=True) as txn:
             prepare(txn, imgset, args.n_worker)
